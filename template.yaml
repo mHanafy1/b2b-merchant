@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  MaxAB B2B Order Decisioning Pipeline — event-driven risk scoring and
+  action routing on S3-landed order files.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [x86_64]
+    MemorySize: 1024
+    Timeout: 300
+    Environment:
+      Variables:
+        S3_BUCKET: !Ref DataBucket
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: maxab-assessment-data
+    Description: Name of the S3 data bucket (must be globally unique).
+
+# ─────────────────────────────────────────────
+# Resources
+# ─────────────────────────────────────────────
+Resources:
+
+  # ── S3 Bucket ──────────────────────────────
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - OrderDecisioningPermission
+      - DecisionActionPermission
+    Properties:
+      BucketName: !Ref BucketName
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Id: TriggerOrderDecisioning
+            Event: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: raw/orders/
+                  - Name: suffix
+                    Value: .csv
+            Function: !GetAtt OrderDecisioningFunction.Arn
+          - Id: TriggerDecisionAction
+            Event: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: decisions/
+                  - Name: suffix
+                    Value: .csv
+            Function: !GetAtt DecisionActionFunction.Arn
+
+  # ── SQS — manual-review escalation queue ───
+  ManualReviewQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: maxab-manual-review-queue
+      VisibilityTimeout: 30
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  # ── IAM Role shared by both Lambdas ────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: maxab-lambda-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: maxab-lambda-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: S3Access
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${BucketName}
+                  - !Sub arn:aws:s3:::${BucketName}/*
+              - Sid: SQSAccess
+                Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueUrl
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ManualReviewQueue.Arn
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+
+  # ── Lambda 1 — Order Decisioning ───────────
+  OrderDecisioningFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: maxab-order-decisioning
+      Description: "Classifies orders as auto-approve / manual-review / decline"
+      CodeUri: lambda/order_decisioning/
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref BucketName
+          CUSTOMERS_KEY: raw/customers/customers.csv
+          FRAUD_FLAGS_KEY: raw/fraud_flags/fraud_flags.csv
+          ACTIONS_HISTORY_KEY: raw/actions/actions_reference.csv
+
+  OrderDecisioningPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt OrderDecisioningFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:s3:::${BucketName}
+
+  OrderDecisioningLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${OrderDecisioningFunction}
+      RetentionInDays: 30
+
+  # ── Lambda 2 — Decision Action Router ──────
+  DecisionActionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: maxab-decision-action
+      Description: "Executes downstream action for each decision"
+      CodeUri: lambda/decision_action/
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref BucketName
+          MANUAL_REVIEW_QUEUE_URL: !Ref ManualReviewQueue
+
+  DecisionActionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DecisionActionFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:s3:::${BucketName}
+
+  DecisionActionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DecisionActionFunction}
+      RetentionInDays: 30
+
+# ─────────────────────────────────────────────
+# Outputs
+# ─────────────────────────────────────────────
+Outputs:
+  DataBucketName:
+    Description: S3 data bucket
+    Value: !Ref DataBucket
+
+  OrderDecisioningArn:
+    Description: Lambda 1 ARN
+    Value: !GetAtt OrderDecisioningFunction.Arn
+
+  DecisionActionArn:
+    Description: Lambda 2 ARN
+    Value: !GetAtt DecisionActionFunction.Arn
+
+  ManualReviewQueueUrl:
+    Description: SQS queue URL for manual-review escalations
+    Value: !Ref ManualReviewQueue
+
+  ManualReviewQueueArn:
+    Description: SQS queue ARN
+    Value: !GetAtt ManualReviewQueue.Arn
