@@ -1,0 +1,25 @@
+# OS
+.DS_Store
+
+# Claude
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Secrets
+.env
+*.env
+credentials
+.aws/credentials
+
+# Data files — seed data lives in S3, not in version control
+*.csv
+
+# Lambda build artefacts
+vendor/
