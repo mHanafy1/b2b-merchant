@@ -64,10 +64,12 @@ Event-driven AWS pipeline that scores incoming B2B wholesale orders with a five-
 
 | Condition | Decision |
 |---|---|
-| risk ≥ 0.55 | decline |
-| 0.35 ≤ risk < 0.55 | manual-review |
-| risk < 0.35 | auto-approve |
-| New customer (tenure < 30d, orders < 3, approved < 3) | minimum: manual-review; fast-track if basket < 5k & fraud < 0.15 |
+| risk ≥ 0.55 | `decline` |
+| 0.25 ≤ risk < 0.55 | `manual-review` |
+| risk < 0.25 | `auto-approve` |
+| New customer (tenure < 30d, **and** total\_orders < 3 **and** approved\_orders < 3) | floor risk at 0.20; minimum decision is `manual-review`; decline still possible if risk ≥ 0.55 |
+| New customer + basket < 5,000 EGP + fraud\_score < 0.15 | `manual-review` with `fast-track-review` flag in `decision_reason` for ops filtering |
+| Customer reaches 3 approved orders in actions history | new-customer flag lifted; floor and fast-track routing removed entirely |
 
 ---
 
@@ -248,6 +250,7 @@ aws logs delete-log-group --log-group-name /aws/lambda/maxab-decision-action   -
 ├── template.yaml                        # AWS SAM / CloudFormation template
 ├── deploy.py                            # Legacy deploy script (pre-SAM)
 ├── generate_and_upload.py               # Synthetic dataset generator
+├── generate_test_csvs.py                # Three-scenario pipeline test harness
 ├── athena_setup.sql                     # Athena DDL for querying S3 data
 ├── orders.csv                           # 200k-order dataset
 ├── customers.csv                        # Customer master
