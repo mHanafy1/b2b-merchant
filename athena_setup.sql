@@ -192,3 +192,31 @@ JOIN (
 WHERE f.fraud_score > 0.80
 ORDER BY f.fraud_score DESC
 LIMIT 25;
+
+-- ============================================================
+-- Actions table  (Lambda 2 output)
+-- ============================================================
+
+DROP TABLE IF EXISTS maxab.actions;
+
+CREATE EXTERNAL TABLE maxab.actions (
+    order_id             STRING,
+    customer_id          STRING,
+    decision             STRING,
+    action               STRING,
+    action_detail        STRING,
+    risk_score           DOUBLE,
+    fraud_score          DOUBLE,
+    basket_value         DOUBLE,
+    ltv                  DOUBLE,
+    payment_method       STRING,
+    retry_rail           STRING,
+    decision_reason      STRING,
+    source_decision_file STRING,
+    actioned_at          STRING
+)
+ROW FORMAT DELIMITED
+    FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+LOCATION 's3://maxab-assessment-data/actions/'
+TBLPROPERTIES ('skip.header.line.count' = '1');
