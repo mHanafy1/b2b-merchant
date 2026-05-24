@@ -18,18 +18,11 @@ CREATE EXTERNAL TABLE maxab.orders (
     payment_status    STRING,
     fulfilment_status STRING
 )
-ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
-WITH SERDEPROPERTIES (
-    'separatorChar' = ',',
-    'quoteChar'     = '"',
-    'escapeChar'    = '\\'
-)
+ROW FORMAT DELIMITED
+    FIELDS TERMINATED BY ','
 STORED AS TEXTFILE
 LOCATION 's3://maxab-assessment-data/raw/orders/'
-TBLPROPERTIES (
-    'skip.header.line.count' = '1',
-    'classification'         = 'csv'
-);
+TBLPROPERTIES ('skip.header.line.count' = '1');
 
 
 -- ============================================================
@@ -37,24 +30,20 @@ TBLPROPERTIES (
 -- ============================================================
 DROP TABLE IF EXISTS maxab.order_items;
 CREATE EXTERNAL TABLE maxab.order_items (
-    order_id   STRING,
-    sku_id     STRING,
-    quantity   INT,
-    unit_price DOUBLE,
-    line_total DOUBLE
+    order_item_id STRING,
+    order_id      STRING,
+    sku_id        STRING,
+    category      STRING,
+    quantity      INT,
+    unit          STRING,
+    unit_price    DOUBLE,
+    line_total    DOUBLE
 )
-ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
-WITH SERDEPROPERTIES (
-    'separatorChar' = ',',
-    'quoteChar'     = '"',
-    'escapeChar'    = '\\'
-)
+ROW FORMAT DELIMITED
+    FIELDS TERMINATED BY ','
 STORED AS TEXTFILE
 LOCATION 's3://maxab-assessment-data/raw/order_items/'
-TBLPROPERTIES (
-    'skip.header.line.count' = '1',
-    'classification'         = 'csv'
-);
+TBLPROPERTIES ('skip.header.line.count' = '1');
 
 
 -- ============================================================
@@ -68,18 +57,11 @@ CREATE EXTERNAL TABLE maxab.customers (
     ltv          DOUBLE,
     region       STRING
 )
-ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
-WITH SERDEPROPERTIES (
-    'separatorChar' = ',',
-    'quoteChar'     = '"',
-    'escapeChar'    = '\\'
-)
+ROW FORMAT DELIMITED
+    FIELDS TERMINATED BY ','
 STORED AS TEXTFILE
 LOCATION 's3://maxab-assessment-data/raw/customers/'
-TBLPROPERTIES (
-    'skip.header.line.count' = '1',
-    'classification'         = 'csv'
-);
+TBLPROPERTIES ('skip.header.line.count' = '1');
 
 
 -- ============================================================
@@ -91,18 +73,11 @@ CREATE EXTERNAL TABLE maxab.fraud_flags (
     fraud_score DOUBLE,
     flag_reason STRING
 )
-ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
-WITH SERDEPROPERTIES (
-    'separatorChar' = ',',
-    'quoteChar'     = '"',
-    'escapeChar'    = '\\'
-)
+ROW FORMAT DELIMITED
+    FIELDS TERMINATED BY ','
 STORED AS TEXTFILE
 LOCATION 's3://maxab-assessment-data/raw/fraud_flags/'
-TBLPROPERTIES (
-    'skip.header.line.count' = '1',
-    'classification'         = 'csv'
-);
+TBLPROPERTIES ('skip.header.line.count' = '1');
 
 
 -- ============================================================
